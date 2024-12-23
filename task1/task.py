@@ -18,8 +18,7 @@ def get_cell_value(json_file_path, row_index, col_index):
         return f"Ошибка: {e}"
 
 
-if __name__ == "__main__":
-    # Получаем аргументы командной строки
+def main():
     if len(sys.argv) != 4:
         print("Использование: python script.py <путь_к_json_файлу> <номер_строки> <номер_столбца>")
     else:
@@ -29,3 +28,6 @@ if __name__ == "__main__":
 
         value = get_cell_value(json_file, row, column)
         print(f"Значение ячейки: {value}")
+
+if __name__ == "__main__":
+    main()

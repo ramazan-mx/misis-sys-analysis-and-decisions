@@ -1,72 +1,88 @@
 import json
-
-class UnionFind:
-    def __init__(self):
-        self.parent = {}
-
-    def find(self, x):
-        if self.parent.get(x, x) != x:
-            self.parent[x] = self.find(self.parent[x])
-        return self.parent.get(x, x)
-
-    def union(self, x, y):
-        root_x = self.find(x)
-        root_y = self.find(y)
-        if root_x != root_y:
-            self.parent[root_y] = root_x
+from collections import defaultdict
 
 def parse_ranking(ranking):
     clusters = []
-    for cluster in ranking:
-        if isinstance(cluster, list):
-            clusters.append(set(cluster))
+    for c in ranking:
+        if isinstance(c, list):
+            clusters.append(set(c))
         else:
-            clusters.append({cluster})
-    return clusters
+            clusters.append({c})
 
-def find_conflicts(ranking_a, ranking_b):
-    clusters_a = parse_ranking(ranking_a)
-    clusters_b = parse_ranking(ranking_b)
+    rank_of = {}
+    for i, cluster in enumerate(clusters):
+        for x in cluster:
+            rank_of[x] = i
+    return rank_of
 
-    uf = UnionFind()
-    all_elements = set()
+def main(ranking_a_str: str, ranking_b_str: str) -> str:
+    """
+    Принимает две JSON-строки с ранжировками и возвращает
+    JSON-строку, содержащую ядро противоречий (список компонент),
+    если таковые есть.
+    """
+    # 1) Читаем вход
+    ranking_a = json.loads(ranking_a_str)
+    ranking_b = json.loads(ranking_b_str)
 
-    for cluster in clusters_a:
-        elements = list(cluster)
-        all_elements.update(elements)
-        for i in range(len(elements) - 1):
-            uf.union(elements[i], elements[i + 1])
+    # 2) Строим "rank_of" для каждого
+    rankA = parse_ranking(ranking_a)
+    rankB = parse_ranking(ranking_b)
 
-    for cluster in clusters_b:
-        elements = list(cluster)
-        all_elements.update(elements)
-        for i in range(len(elements) - 1):
-            uf.union(elements[i], elements[i + 1])
+    all_items = set(rankA.keys()) | set(rankB.keys())
 
-    groups = {}
-    for element in all_elements:
-        root = uf.find(element)
-        if root not in groups:
-            groups[root] = []
-        groups[root].append(element)
+    # 3) Определим функцию, как сравниваем пару (x,y) у эксперта
+    def compare(ranking_dict, x, y):
+        rx = ranking_dict.get(x, 9999999)
+        ry = ranking_dict.get(y, 9999999)
+        if rx == ry:
+            return 0
+        return +1 if rx < ry else -1
 
-    conflict_clusters = []
-    for group in groups.values():
-        if len(group) > 1:
-            conflict_clusters.append(sorted(group))
+    parent = {}
+    def find(x):
+        if parent.setdefault(x, x) != x:
+            parent[x] = find(parent[x])
+        return parent[x]
 
-    return conflict_clusters
+    def union(x, y):
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[ry] = rx
 
-def main(ranking_a: str, ranking_b: str) -> str:
-    ranking_a = json.loads(ranking_a)
-    ranking_b = json.loads(ranking_b)
+    # 4) Для каждой пары (x,y) смотрим, нет ли противоречия
+    all_items_list = sorted(all_items)
+    n = len(all_items_list)
+    for i in range(n):
+        for j in range(i+1, n):
+            x = all_items_list[i]
+            y = all_items_list[j]
+            ca = compare(rankA, x, y)
+            cb = compare(rankB, x, y)
 
-    conflict_clusters = find_conflicts(ranking_a, ranking_b)
+            # Если ровно противоположные знаки (один +1, другой -1),
+            # значит эксперты оценивают пару наоборот => конфликт
+            if (ca == +1 and cb == -1) or (ca == -1 and cb == +1):
+                # Склеиваем x,y в одну конфликтную группу
+                union(x, y)
 
-    return json.dumps(conflict_clusters, ensure_ascii=False)
+    # 5) Собираем компоненты
+    groups = defaultdict(list)
+    for x in all_items_list:
+        groups[find(x)].append(x)
+
+    # Оставляем только те, где >=2 элемента
+    conflict_core = []
+    for leader, objs in groups.items():
+        if len(objs) > 1:
+            conflict_core.append(sorted(objs))
+
+    # 6) Возвращаем JSON
+    return json.dumps(conflict_core, ensure_ascii=False)
+
 
 if __name__ == "__main__":
+    # Тест из условия
     ranking_a = '[1,[2,3],4,[5,6,7],8,9,10]'
     ranking_b = '[[1,2],[3,4,5],6,7,9,[8,10]]'
-    result = main(ranking_a, ranking_b)
-    print(result)
+    print(main(ranking_a, ranking_b))
